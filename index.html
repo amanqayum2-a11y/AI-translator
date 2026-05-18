@@ -2,102 +2,98 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Live Urdu Voice Translator</title>
+<title>Live Mosque Voice Translator</title>
 
 <style>
-  body {
-    margin: 0;
-    background: #050814;
-    color: white;
-    font-family: Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
+body {
+  margin: 0;
+  background: #000;
+  color: white;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
 
-  header {
-    padding: 20px;
-    text-align: center;
-    font-size: 28px;
-    background: rgba(255,255,255,0.05);
-  }
+header {
+  text-align: center;
+  padding: 15px;
+  font-size: 24px;
+  background: #111;
+}
 
-  .status {
-    text-align: center;
-    font-size: 14px;
-    opacity: 0.7;
-    margin-top: -10px;
-  }
+.status {
+  font-size: 14px;
+  opacity: 0.7;
+}
 
-  .box {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 40px;
-    text-align: center;
-  }
+.screen {
+  height: calc(100vh - 70px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 30px;
+}
 
-  .urdu {
-    font-size: 42px;
-    direction: rtl;
-    color: #93c5fd;
-  }
+.urdu {
+  font-size: 48px;
+  color: #60a5fa;
+  direction: rtl;
+  min-height: 80px;
+}
 
-  .english {
-    font-size: 54px;
-    font-weight: bold;
-    color: #ffffff;
-    margin-top: 20px;
-  }
+.english {
+  font-size: 64px;
+  font-weight: bold;
+  margin-top: 20px;
+  max-width: 95%;
+}
 
-  .panel {
-    max-width: 90%;
-  }
-
-  button {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 15px 25px;
-    font-size: 18px;
-    border: none;
-    border-radius: 12px;
-    background: #2563eb;
-    color: white;
-    cursor: pointer;
-  }
-
-  button:hover {
-    background: #1d4ed8;
-  }
+button {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 15px 30px;
+  font-size: 18px;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: white;
+}
 </style>
 </head>
 
 <body>
 
 <header>
-🕌 Live Urdu → English Voice Translator
-<div class="status" id="status">Click start and speak Urdu</div>
+🕌 Live Urdu → English Mosque Voice Translator
+<div class="status" id="status">Click start and allow microphone</div>
 </header>
 
-<div class="box">
-  <div class="panel">
-    <div class="urdu" id="urduText">---</div>
-    <div class="english" id="englishText">---</div>
-  </div>
+<div class="screen">
+  <div class="urdu" id="urdu">---</div>
+  <div class="english" id="english">---</div>
 </div>
 
-<button onclick="startListening()">🎤 Start Listening</button>
+<button onclick="startMic()">🎤 Start Microphone</button>
 
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+  alert("Your browser does not support Speech Recognition. Use Chrome.");
+}
+
 const recognition = new SpeechRecognition();
 
+// IMPORTANT SETTINGS (this is what was missing before)
 recognition.lang = "ur-PK";
 recognition.continuous = true;
-recognition.interimResults = false;
+recognition.interimResults = true;
+
+let finalText = "";
+let lastProcessed = "";
 
 async function translate(text) {
   try {
@@ -113,30 +109,57 @@ async function translate(text) {
     });
 
     const data = await res.json();
-    document.getElementById("englishText").innerText = data.translatedText;
+    return data.translatedText;
   } catch (e) {
-    document.getElementById("englishText").innerText = "Translation error";
+    return "Translation error";
   }
 }
 
-recognition.onresult = function(event) {
-  const text = event.results[event.results.length - 1][0].transcript;
+// LIVE SPEECH STREAM
+recognition.onresult = async (event) => {
+  let interim = "";
 
-  document.getElementById("urduText").innerText = text;
-  document.getElementById("status").innerText = "Translating...";
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    const transcript = event.results[i][0].transcript;
 
-  translate(text).then(() => {
+    if (event.results[i].isFinal) {
+      finalText += transcript + " ";
+    } else {
+      interim += transcript;
+    }
+  }
+
+  const fullText = finalText + interim;
+
+  document.getElementById("urdu").innerText = fullText;
+
+  // avoid spam translations
+  if (finalText !== lastProcessed && finalText.trim().length > 0) {
+    lastProcessed = finalText;
+
+    document.getElementById("status").innerText = "Translating...";
+
+    const translated = await translate(finalText);
+
+    document.getElementById("english").innerText = translated;
+
     document.getElementById("status").innerText = "Live";
-  });
+  }
 };
 
-recognition.onerror = function() {
-  document.getElementById("status").innerText = "Mic error / permission needed";
-};
-
-function startListening() {
+// IMPORTANT: auto restart mic (this was missing before)
+recognition.onend = () => {
   recognition.start();
-  document.getElementById("status").innerText = "Listening...";
+};
+
+recognition.onerror = (e) => {
+  document.getElementById("status").innerText = "Mic error - restarting...";
+  setTimeout(() => recognition.start(), 1000);
+};
+
+function startMic() {
+  recognition.start();
+  document.getElementById("status").innerText = "Listening... 🎤";
 }
 </script>
 
