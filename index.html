@@ -1,167 +1,306 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Live Mosque Voice Translator</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mosque Real-Time Speech Translator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-<style>
-body {
-  margin: 0;
-  background: #000;
-  color: white;
-  font-family: Arial, sans-serif;
-  overflow: hidden;
-}
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0b0f19;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
 
-header {
-  text-align: center;
-  padding: 15px;
-  font-size: 24px;
-  background: #111;
-}
+        /* Header styling for the TV display */
+        header {
+            background-color: #111827;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #10b981; /* Islamic Green accent */
+        }
 
-.status {
-  font-size: 14px;
-  opacity: 0.7;
-}
+        h1 {
+            font-size: 2.5rem;
+            color: #10b981;
+            font-weight: 600;
+        }
 
-.screen {
-  height: calc(100vh - 70px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  padding: 30px;
-}
+        .status-badge {
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background-color: #ef4444;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
 
-.urdu {
-  font-size: 48px;
-  color: #60a5fa;
-  direction: rtl;
-  min-height: 80px;
-}
+        .status-badge.active {
+            background-color: #10b981;
+            animation: pulse 2s infinite;
+        }
 
-.english {
-  font-size: 64px;
-  font-weight: bold;
-  margin-top: 20px;
-  max-width: 95%;
-}
+        /* Main layout container */
+        .container {
+            display: flex;
+            flex: 1;
+            padding: 30px;
+            gap: 30px;
+            height: calc(100vh - 100px);
+        }
 
-button {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 15px 30px;
-  font-size: 18px;
-  border: none;
-  border-radius: 10px;
-  background: #2563eb;
-  color: white;
-}
-</style>
+        /* Translation box takes maximum space for TV viewing */
+        .translation-box {
+            flex: 2;
+            background-color: #1f2937;
+            border-radius: 15px;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .box-title {
+            font-size: 1.5rem;
+            color: #9ca3af;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Massive text for crystal clear viewing from the back of the prayer hall */
+        #english-output {
+            font-size: 3.5rem;
+            line-height: 1.5;
+            color: #f3f4f6;
+            overflow-y: auto;
+            flex-grow: 1;
+            white-space: pre-wrap;
+            padding-right: 15px;
+        }
+
+        /* Side panel for original Urdu transcript (optional reference) */
+        .urdu-box {
+            flex: 1;
+            background-color: #111827;
+            border-radius: 15px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #374151;
+        }
+
+        #urdu-output {
+            font-size: 2.2rem;
+            line-height: 1.6;
+            color: #a7f3d0;
+            direction: rtl;
+            font-family: 'Noori Nastaliq', 'Urdu Typesetting', sans-serif;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        /* Control panel for the operator laptop */
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            right: 50px;
+            display: flex;
+            gap: 15px;
+            background: rgba(17, 24, 39, 0.85);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-start { background-color: #10b981; color: white; }
+        .btn-start:hover { background-color: #059669; }
+        .btn-clear { background-color: #4b5563; color: white; }
+        .btn-clear:hover { background-color: #374151; }
+
+        /* Custom Scrollbar for clean look */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 5px; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+    </style>
 </head>
-
 <body>
 
-<header>
-🕌 Live Urdu → English Mosque Voice Translator
-<div class="status" id="status">Click start and allow microphone</div>
-</header>
+    <header>
+        <h1>Mosque Live Translation (Urdu ➔ English)</h1>
+        <div id="status" class="status-badge">● Offline</div>
+    </header>
 
-<div class="screen">
-  <div class="urdu" id="urdu">---</div>
-  <div class="english" id="english">---</div>
-</div>
+    <div class="container">
+        <!-- Main English Translation Screen -->
+        <div class="translation-box">
+            <div class="box-title">English Translation</div>
+            <div id="english-output">Translation will appear here in real-time...</div>
+        </div>
 
-<button onclick="startMic()">🎤 Start Microphone</button>
+        <!-- Side Urdu Transcript Box -->
+        <div class="urdu-box">
+            <div class="box-title" style="text-align: right;">اُردو سکرپٹ</div>
+            <div id="urdu-output">Imam's speech will show here...</div>
+        </div>
+    </div>
 
-<script>
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    <!-- Operator Control Buttons -->
+    <div class="controls">
+        <button class="btn-start" id="start-btn" onclick="toggleListening()">Start Listening</button>
+        <button class="btn-clear" onclick="clearText()">Clear Screen</button>
+    </div>
 
-if (!SpeechRecognition) {
-  alert("Your browser does not support Speech Recognition. Use Chrome.");
-}
+    <script>
+        let recognition;
+        let isListening = false;
+        
+        const startBtn = document.getElementById('start-btn');
+        const statusBadge = document.getElementById('status');
+        const urduOutput = document.getElementById('urdu-output');
+        const englishOutput = document.getElementById('english-output');
 
-const recognition = new SpeechRecognition();
+        // Check if browser supports Web Speech API
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            // Set up configurations
+            recognition.continuous = true; // Keep listening continuously
+            recognition.interimResults = true; // Show temporary live results while speaking
+            recognition.lang = 'ur-PK'; // Target Urdu (Pakistan) speech patterns
 
-// IMPORTANT SETTINGS (this is what was missing before)
-recognition.lang = "ur-PK";
-recognition.continuous = true;
-recognition.interimResults = true;
+            recognition.onstart = () => {
+                isListening = true;
+                startBtn.innerText = "Stop Listening";
+                startBtn.style.backgroundColor = "#ef4444";
+                statusBadge.innerText = "● LIVE TRANSLATION ACTIVE";
+                statusBadge.classList.add('active');
+            };
 
-let finalText = "";
-let lastProcessed = "";
+            recognition.onend = () => {
+                // Auto-restart if it cuts out unexpectedly during the sermon
+                if (isListening) {
+                    recognition.start();
+                } else {
+                    resetUI();
+                }
+            };
 
-async function translate(text) {
-  try {
-    const res = await fetch("https://libretranslate.de/translate", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        q: text,
-        source: "ur",
-        target: "en",
-        format: "text"
-      })
-    });
+            recognition.onresult = async (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
 
-    const data = await res.json();
-    return data.translatedText;
-  } catch (e) {
-    return "Translation error";
-  }
-}
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + ' ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
 
-// LIVE SPEECH STREAM
-recognition.onresult = async (event) => {
-  let interim = "";
+                // Display original Urdu speech live
+                if (finalTranscript || interimTranscript) {
+                    urduOutput.innerHTML = `<span style="color: #ffffff;">${finalTranscript}</span> <span style="color: #9ca3af;">${interimTranscript}</span>`;
+                    autoScroll(urduOutput);
+                }
 
-  for (let i = event.resultIndex; i < event.results.length; i++) {
-    const transcript = event.results[i][0].transcript;
+                // Process translation once a full sentence is finalized
+                if (finalTranscript.trim().length > 0) {
+                    translateText(finalTranscript.trim());
+                }
+            };
 
-    if (event.results[i].isFinal) {
-      finalText += transcript + " ";
-    } else {
-      interim += transcript;
-    }
-  }
+            recognition.onerror = (event) => {
+                console.error("Speech Recognition Error: ", event.error);
+                if (event.error === 'not-allowed') {
+                    alert("Please allow microphone access in your browser settings.");
+                    isListening = false;
+                    resetUI();
+                }
+            };
 
-  const fullText = finalText + interim;
+        } else {
+            alert("Your browser does not support Speech Recognition. Please use Google Chrome on a laptop.");
+        }
 
-  document.getElementById("urdu").innerText = fullText;
+        function toggleListening() {
+            if (!isListening) {
+                recognition.start();
+            } else {
+                isListening = false;
+                recognition.stop();
+                resetUI();
+            }
+        }
 
-  // avoid spam translations
-  if (finalText !== lastProcessed && finalText.trim().length > 0) {
-    lastProcessed = finalText;
+        function resetUI() {
+            startBtn.innerText = "Start Listening";
+            startBtn.style.backgroundColor = "#10b981";
+            statusBadge.innerText = "● Offline";
+            statusBadge.classList.remove('active');
+        }
 
-    document.getElementById("status").innerText = "Translating...";
+        // Free/Open Translation API implementation (MyMemory API)
+        async function translateText(text) {
+            try {
+                const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ur|en`);
+                const data = await response.json();
+                
+                if (data.responseData && data.responseData.translatedText) {
+                    let translatedChunk = data.responseData.translatedText;
+                    
+                    // If it's the first translation, clear the placeholder text
+                    if (englishOutput.innerText.includes("Translation will appear here")) {
+                        englishOutput.innerText = "";
+                    }
 
-    const translated = await translate(finalText);
+                    // Append translation and smoothly scroll the TV screen down
+                    englishOutput.innerText += translatedChunk + " \n\n";
+                    autoScroll(englishOutput);
+                }
+            } catch (error) {
+                console.error("Translation Error: ", error);
+            }
+        }
 
-    document.getElementById("english").innerText = translated;
+        function clearText() {
+            urduOutput.innerText = "Imam's speech will show here...";
+            englishOutput.innerText = "Translation will appear here in real-time...";
+        }
 
-    document.getElementById("status").innerText = "Live";
-  }
-};
-
-// IMPORTANT: auto restart mic (this was missing before)
-recognition.onend = () => {
-  recognition.start();
-};
-
-recognition.onerror = (e) => {
-  document.getElementById("status").innerText = "Mic error - restarting...";
-  setTimeout(() => recognition.start(), 1000);
-};
-
-function startMic() {
-  recognition.start();
-  document.getElementById("status").innerText = "Listening... 🎤";
-}
-</script>
-
+        function autoScroll(element) {
+            element.scrollTop = element.scrollHeight;
+        }
+    </script>
 </body>
 </html>
