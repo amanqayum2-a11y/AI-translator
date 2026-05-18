@@ -19,6 +19,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            cursor: pointer;
         }
 
         header {
@@ -45,6 +46,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            transition: all 0.3s ease;
         }
 
         .status-badge.active {
@@ -56,12 +58,11 @@
             display: flex;
             flex: 1;
             padding: 30px;
-            gap: 30px;
             height: calc(100vh - 100px);
         }
 
         .translation-box {
-            flex: 2;
+            flex: 1;
             background-color: #1f2937;
             border-radius: 15px;
             padding: 40px;
@@ -76,68 +77,25 @@
             margin-bottom: 20px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 15px;
         }
 
+        /* Smaller font size for maximum screen efficiency */
         #english-output {
-            font-size: 3.5rem;
-            line-height: 1.5;
+            font-size: 2.5rem; 
+            line-height: 1.6;
             color: #f3f4f6;
             overflow-y: auto;
             flex-grow: 1;
             white-space: pre-wrap;
-            padding-right: 15px;
+            padding-right: 20px;
+            text-align: left; 
         }
 
-        .urdu-box {
-            flex: 1;
-            background-color: #111827;
-            border-radius: 15px;
-            padding: 30px;
-            display: flex;
-            flex-direction: column;
-            border: 1px solid #374151;
-        }
-
-        #urdu-output {
-            font-size: 2.2rem;
-            line-height: 1.6;
-            color: #a7f3d0;
-            direction: rtl;
-            font-family: 'Noori Nastaliq', 'Urdu Typesetting', sans-serif;
-            overflow-y: auto;
-            flex-grow: 1;
-        }
-
-        .controls {
-            position: absolute;
-            bottom: 30px;
-            right: 50px;
-            display: flex;
-            gap: 15px;
-            background: rgba(17, 24, 39, 0.85);
-            padding: 15px;
-            border-radius: 10px;
-            backdrop-filter: blur(5px);
-        }
-
-        button {
-            padding: 12px 25px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-start { background-color: #10b981; color: white; }
-        .btn-start:hover { background-color: #059669; }
-        .btn-clear { background-color: #4b5563; color: white; }
-        .btn-clear:hover { background-color: #374151; }
-
-        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar { width: 12px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 6px; }
 
         @keyframes pulse {
             0% { opacity: 1; }
@@ -149,28 +107,15 @@
 <body>
 
     <header>
-        <h1>Mosque Live Translation (Urdu ➔ English)</h1>
-        <div id="status" class="status-badge">● Offline</div>
+        <h1>Live English Translation</h1>
+        <div id="status" class="status-badge">● Click Screen to Start</div>
     </header>
 
     <div class="container">
-        <!-- English Screen -->
         <div class="translation-box">
-            <div class="box-title">English Translation</div>
-            <div id="english-output">Translation will appear here in real-time...</div>
+            <div class="box-title">Khutba Translation</div>
+            <div id="english-output">Click anywhere on the screen to activate the microphone...</div>
         </div>
-
-        <!-- Urdu Screen -->
-        <div class="urdu-box">
-            <div class="box-title" style="text-align: right;">اُردو سکرپٹ</div>
-            <div id="urdu-output">Imam's speech will show here...</div>
-        </div>
-    </div>
-
-    <!-- Controls -->
-    <div class="controls">
-        <button class="btn-start" id="start-btn" onclick="toggleListening()">Start Listening</button>
-        <button class="btn-clear" onclick="clearText()">Clear Screen</button>
     </div>
 
     <script>
@@ -178,14 +123,11 @@
         let isListening = false;
         let silenceTimer;
         
-        // Master Storage Variables
         let lockedUrdu = "";      
         let lockedEnglish = "";   
         let currentDraftUrdu = ""; 
         
-        const startBtn = document.getElementById('start-btn');
         const statusBadge = document.getElementById('status');
-        const urduOutput = document.getElementById('urdu-output');
         const englishOutput = document.getElementById('english-output');
 
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -198,10 +140,12 @@
 
             recognition.onstart = () => {
                 isListening = true;
-                startBtn.innerText = "Stop Listening";
-                startBtn.style.backgroundColor = "#ef4444";
                 statusBadge.innerText = "● LIVE TRANSLATION ACTIVE";
                 statusBadge.classList.add('active');
+                
+                if (englishOutput.innerText.includes("Click anywhere")) {
+                    englishOutput.innerText = "Listening to the Imam...\nTranslation will appear here shortly.";
+                }
             };
 
             recognition.onend = () => {
@@ -212,7 +156,8 @@
                         }
                     }, 50);
                 } else {
-                    resetUI();
+                    statusBadge.innerText = "● Offline";
+                    statusBadge.classList.remove('active');
                 }
             };
 
@@ -234,36 +179,30 @@
                     translateText(newlyFinalized.trim());
                 }
 
-                urduOutput.innerHTML = `<span style="color: #ffffff;">${lockedUrdu}</span> <span style="color: #9ca3af;">${currentDraftUrdu}</span>`;
-                autoScroll(urduOutput);
-
                 clearTimeout(silenceTimer);
 
                 if (currentDraftUrdu.trim().length > 0) {
+                    // Timer reduced to 0.8 seconds (800ms) for faster dispatch
                     silenceTimer = setTimeout(() => {
                         let textToProcess = currentDraftUrdu.trim();
                         
                         lockedUrdu += textToProcess + " ";
                         currentDraftUrdu = ""; 
                         
-                        urduOutput.innerHTML = `<span style="color: #ffffff;">${lockedUrdu}</span>`;
-                        autoScroll(urduOutput);
-
                         translateText(textToProcess);
-
-                        // Soft reset the microphone buffer to keep memory clean
                         recognition.stop(); 
                         
-                    }, 1200); 
+                    }, 800); 
                 }
             };
 
             recognition.onerror = (event) => {
                 console.error("Speech Recognition Error: ", event.error);
                 if (event.error === 'not-allowed') {
-                    alert("Please allow microphone access.");
+                    alert("Please allow microphone access in Chrome settings.");
                     isListening = false;
-                    resetUI();
+                    statusBadge.innerText = "● Access Denied";
+                    statusBadge.classList.remove('active');
                 }
             };
 
@@ -271,23 +210,11 @@
             alert("Your browser does not support Speech Recognition. Please use Google Chrome.");
         }
 
-        function toggleListening() {
-            if (!isListening) {
+        document.body.addEventListener('click', () => {
+            if (!isListening && recognition) {
                 recognition.start();
-            } else {
-                isListening = false;
-                recognition.stop();
-                clearTimeout(silenceTimer);
-                resetUI();
             }
-        }
-
-        function resetUI() {
-            startBtn.innerText = "Start Listening";
-            startBtn.style.backgroundColor = "#10b981";
-            statusBadge.innerText = "● Offline";
-            statusBadge.classList.remove('active');
-        }
+        });
 
         async function translateText(text) {
             if (!text || text.trim().length === 0) return;
@@ -299,32 +226,22 @@
                 if (data.responseData && data.responseData.translatedText) {
                     let translatedChunk = data.responseData.translatedText.trim();
                     
-                    // Skips common translation hallucinations or raw romanized loops
                     if (translatedChunk.toLowerCase() === text.toLowerCase()) {
-                        console.warn("API returned transliterated text, skipping display to keep screen clean.");
-                        return;
+                        return; // Skip if it hallucinated Roman Urdu
                     }
 
-                    if (englishOutput.innerText.includes("Translation will appear here")) {
+                    if (englishOutput.innerText.includes("Listening to the Imam")) {
                         englishOutput.innerText = "";
+                        lockedEnglish = "";
                     }
 
-                    // Log to display master variable
-                    lockedEnglish += translatedChunk + "\n\n";
+                    lockedEnglish += translatedChunk + " "; // Appending next to each other instead of double line breaks for space saving
                     englishOutput.innerText = lockedEnglish;
                     autoScroll(englishOutput);
                 }
             } catch (error) {
                 console.error("Translation Error: ", error);
             }
-        }
-
-        function clearText() {
-            lockedUrdu = "";
-            lockedEnglish = "";
-            currentDraftUrdu = "";
-            urduOutput.innerText = "Imam's speech will show here...";
-            englishOutput.innerText = "Translation will appear here in real-time...";
         }
 
         function autoScroll(element) {
