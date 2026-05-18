@@ -1,4 +1,186 @@
-<script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mosque Real-Time Speech Translator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0b0f19;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header styling for the TV display */
+        header {
+            background-color: #111827;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #10b981; /* Islamic Green accent */
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background-color: #ef4444;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge.active {
+            background-color: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        /* Main layout container */
+        .container {
+            display: flex;
+            flex: 1;
+            padding: 30px;
+            gap: 30px;
+            height: calc(100vh - 100px);
+        }
+
+        /* Translation box takes maximum space for TV viewing */
+        .translation-box {
+            flex: 2;
+            background-color: #1f2937;
+            border-radius: 15px;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .box-title {
+            font-size: 1.5rem;
+            color: #9ca3af;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Massive text for crystal clear viewing from the back of the prayer hall */
+        #english-output {
+            font-size: 3.5rem;
+            line-height: 1.5;
+            color: #f3f4f6;
+            overflow-y: auto;
+            flex-grow: 1;
+            white-space: pre-wrap;
+            padding-right: 15px;
+        }
+
+        /* Side panel for original Urdu transcript (optional reference) */
+        .urdu-box {
+            flex: 1;
+            background-color: #111827;
+            border-radius: 15px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #374151;
+        }
+
+        #urdu-output {
+            font-size: 2.2rem;
+            line-height: 1.6;
+            color: #a7f3d0;
+            direction: rtl;
+            font-family: 'Noori Nastaliq', 'Urdu Typesetting', sans-serif;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        /* Control panel for the operator laptop */
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            right: 50px;
+            display: flex;
+            gap: 15px;
+            background: rgba(17, 24, 39, 0.85);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-start { background-color: #10b981; color: white; }
+        .btn-start:hover { background-color: #059669; }
+        .btn-clear { background-color: #4b5563; color: white; }
+        .btn-clear:hover { background-color: #374151; }
+
+        /* Custom Scrollbar for clean look */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 5px; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Mosque Live Translation (Urdu ➔ English)</h1>
+        <div id="status" class="status-badge">● Offline</div>
+    </header>
+
+    <div class="container">
+        <!-- Main English Translation Screen -->
+        <div class="translation-box">
+            <div class="box-title">English Translation</div>
+            <div id="english-output">Translation will appear here in real-time...</div>
+        </div>
+
+        <!-- Side Urdu Transcript Box -->
+        <div class="urdu-box">
+            <div class="box-title" style="text-align: right;">اُردو سکرپٹ</div>
+            <div id="urdu-output">Imam's speech will show here...</div>
+        </div>
+    </div>
+
+    <!-- Operator Control Buttons -->
+    <div class="controls">
+        <button class="btn-start" id="start-btn" onclick="toggleListening()">Start Listening</button>
+        <button class="btn-clear" onclick="clearText()">Clear Screen</button>
+    </div>
+
+    <script>
         let recognition;
         let isListening = false;
         let silenceTimer; // Timer to detect pauses in speech
@@ -132,3 +314,5 @@
             element.scrollTop = element.scrollHeight;
         }
     </script>
+</body>
+</html>
