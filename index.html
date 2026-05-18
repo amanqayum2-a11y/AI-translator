@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Urdu to English Live Translator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 15px;
+      text-align: center;
+      background: #111827;
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+    }
+
+    textarea {
+      width: 50%;
+      height: 100%;
+      font-size: 28px;
+      padding: 20px;
+      border: none;
+      outline: none;
+      resize: none;
+    }
+
+    #urdu {
+      background: #1e293b;
+      color: #f8fafc;
+      direction: rtl;
+    }
+
+    #english {
+      background: #0b1220;
+      color: #d1d5db;
+    }
+
+    .label {
+      position: absolute;
+      top: 70px;
+      font-size: 18px;
+      opacity: 0.7;
+    }
+
+    .left-label { left: 20px; }
+    .right-label { right: 20px; }
+  </style>
+</head>
+<body>
+
+<header>Live Urdu → English Translation (Mosque Display Mode)</header>
+
+<div class="container">
+  <textarea id="urdu" placeholder="اردو یہاں لکھیں..."></textarea>
+  <textarea id="english" placeholder="English translation..." readonly></textarea>
+</div>
+
+<script>
+let timeout = null;
+
+async function translate(text) {
+  if (!text.trim()) {
+    document.getElementById("english").value = "";
+    return;
+  }
+
+  try {
+    const res = await fetch("https://libretranslate.de/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q: text,
+        source: "ur",
+        target: "en",
+        format: "text"
+      })
+    });
+
+    const data = await res.json();
+    document.getElementById("english").value = data.translatedText;
+  } catch (err) {
+    document.getElementById("english").value = "Translation error. Check internet connection.";
+  }
+}
+
+document.getElementById("urdu").addEventListener("input", function () {
+  clearTimeout(timeout);
+  timeout = setTimeout(() => {
+    translate(this.value);
+  }, 500); // small delay to avoid API spam
+});
+</script>
+
+</body>
+</html>
