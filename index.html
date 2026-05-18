@@ -92,7 +92,7 @@
             padding-right: 15px;
         }
 
-        /* Side panel for original Urdu transcript (optional reference) */
+        /* Side panel for original Urdu transcript */
         .urdu-box {
             flex: 1;
             background-color: #111827;
@@ -183,8 +183,7 @@
     <script>
         let recognition;
         let isListening = false;
-        let silenceTimer; // Timer to detect pauses in speech
-        let accumulatedText = ""; // Holds text during a single spoken phrase
+        let globalUrduHistory = ""; // Persistently stores finalized sentences across browser restarts
         
         const startBtn = document.getElementById('start-btn');
         const statusBadge = document.getElementById('status');
@@ -209,7 +208,7 @@
 
             recognition.onend = () => {
                 if (isListening) {
-                    recognition.start(); // Auto-restart loop
+                    recognition.start(); // Keep running seamlessly if the API drops out
                 } else {
                     resetUI();
                 }
@@ -217,39 +216,25 @@
 
             recognition.onresult = (event) => {
                 let interimTranscript = '';
-                let finalTranscript = '';
 
-                // Clear any pending translation timers because the Imam is actively speaking
-                clearTimeout(silenceTimer);
-
+                // Iterate through any newly caught phrases since the last event block
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    let chunk = event.results[i][0].transcript.trim();
+                    
                     if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript + ' ';
+                        if (chunk.length > 0) {
+                            globalUrduHistory += chunk + " ";
+                            // INSTANT REAL-TIME TRIGGER: Send complete clauses out immediately!
+                            translateText(chunk);
+                        }
                     } else {
                         interimTranscript += event.results[i][0].transcript;
                     }
                 }
 
-                // Update the Urdu box immediately with live results
-                if (finalTranscript || interimTranscript) {
-                    urduOutput.innerHTML = `<span style="color: #ffffff;">${finalTranscript}</span> <span style="color: #9ca3af;">${interimTranscript}</span>`;
-                    autoScroll(urduOutput);
-                }
-
-                // If a final segment is declared by the browser, capture it
-                if (finalTranscript.trim().length > 0) {
-                    accumulatedText += finalTranscript + " ";
-                }
-
-                // TRUE REAL-TIME TRIGGER: If the Imam pauses speaking for 1.5 seconds, 
-                // instantly translate whatever has been spoken so far.
-                silenceTimer = setTimeout(() => {
-                    let textToTranslate = accumulatedText.trim() || interimTranscript.trim();
-                    if (textToTranslate.length > 0) {
-                        translateText(textToTranslate);
-                        accumulatedText = ""; // Clear buffer for next sentence
-                    }
-                }, 1500); // 1500 milliseconds = 1.5 seconds of silence
+                // Smoothly update the Urdu pane (Finalized text in white, active typing text in gray)
+                urduOutput.innerHTML = `<span style="color: #ffffff;">${globalUrduHistory}</span> <span style="color: #9ca3af;">${interimTranscript}</span>`;
+                autoScroll(urduOutput);
             };
 
             recognition.onerror = (event) => {
@@ -271,7 +256,6 @@
             } else {
                 isListening = false;
                 recognition.stop();
-                clearTimeout(silenceTimer);
                 resetUI();
             }
         }
@@ -295,8 +279,8 @@
                         englishOutput.innerText = "";
                     }
 
-                    // Append the live translation chunk seamlessly
-                    englishOutput.innerText += translatedChunk + " \n\n";
+                    // Append translations sequentially with double breaks to prevent unreadable text walls
+                    englishOutput.innerText += translatedChunk + "\n\n";
                     autoScroll(englishOutput);
                 }
             } catch (error) {
@@ -307,7 +291,7 @@
         function clearText() {
             urduOutput.innerText = "Imam's speech will show here...";
             englishOutput.innerText = "Translation will appear here in real-time...";
-            accumulatedText = "";
+            globalUrduHistory = "";
         }
 
         function autoScroll(element) {
