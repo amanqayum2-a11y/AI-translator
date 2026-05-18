@@ -1,86 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Urdu to English Live Translator</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: white;
-      margin: 0;
-      display: flex;
-      height: 100vh;
-      flex-direction: column;
-    }
+<meta charset="UTF-8">
+<title>Live Urdu Voice Translator</title>
 
-    header {
-      padding: 15px;
-      text-align: center;
-      background: #111827;
-      font-size: 22px;
-      font-weight: bold;
-    }
-
-    .container {
-      display: flex;
-      flex: 1;
-    }
-
-    textarea {
-      width: 50%;
-      height: 100%;
-      font-size: 28px;
-      padding: 20px;
-      border: none;
-      outline: none;
-      resize: none;
-    }
-
-    #urdu {
-      background: #1e293b;
-      color: #f8fafc;
-      direction: rtl;
-    }
-
-    #english {
-      background: #0b1220;
-      color: #d1d5db;
-    }
-
-    .label {
-      position: absolute;
-      top: 70px;
-      font-size: 18px;
-      opacity: 0.7;
-    }
-
-    .left-label { left: 20px; }
-    .right-label { right: 20px; }
-  </style>
-</head>
-<body>
-
-<header>Live Urdu → English Translation (Mosque Display Mode)</header>
-
-<div class="container">
-  <textarea id="urdu" placeholder="اردو یہاں لکھیں..."></textarea>
-  <textarea id="english" placeholder="English translation..." readonly></textarea>
-</div>
-
-<script>
-let timeout = null;
-
-async function translate(text) {
-  if (!text.trim()) {
-    document.getElementById("english").value = "";
-    return;
+<style>
+  body {
+    margin: 0;
+    background: #050814;
+    color: white;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
   }
 
+  header {
+    padding: 20px;
+    text-align: center;
+    font-size: 28px;
+    background: rgba(255,255,255,0.05);
+  }
+
+  .status {
+    text-align: center;
+    font-size: 14px;
+    opacity: 0.7;
+    margin-top: -10px;
+  }
+
+  .box {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    text-align: center;
+  }
+
+  .urdu {
+    font-size: 42px;
+    direction: rtl;
+    color: #93c5fd;
+  }
+
+  .english {
+    font-size: 54px;
+    font-weight: bold;
+    color: #ffffff;
+    margin-top: 20px;
+  }
+
+  .panel {
+    max-width: 90%;
+  }
+
+  button {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 25px;
+    font-size: 18px;
+    border: none;
+    border-radius: 12px;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #1d4ed8;
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+🕌 Live Urdu → English Voice Translator
+<div class="status" id="status">Click start and speak Urdu</div>
+</header>
+
+<div class="box">
+  <div class="panel">
+    <div class="urdu" id="urduText">---</div>
+    <div class="english" id="englishText">---</div>
+  </div>
+</div>
+
+<button onclick="startListening()">🎤 Start Listening</button>
+
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+
+recognition.lang = "ur-PK";
+recognition.continuous = true;
+recognition.interimResults = false;
+
+async function translate(text) {
   try {
     const res = await fetch("https://libretranslate.de/translate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         q: text,
         source: "ur",
@@ -90,18 +113,31 @@ async function translate(text) {
     });
 
     const data = await res.json();
-    document.getElementById("english").value = data.translatedText;
-  } catch (err) {
-    document.getElementById("english").value = "Translation error. Check internet connection.";
+    document.getElementById("englishText").innerText = data.translatedText;
+  } catch (e) {
+    document.getElementById("englishText").innerText = "Translation error";
   }
 }
 
-document.getElementById("urdu").addEventListener("input", function () {
-  clearTimeout(timeout);
-  timeout = setTimeout(() => {
-    translate(this.value);
-  }, 500); // small delay to avoid API spam
-});
+recognition.onresult = function(event) {
+  const text = event.results[event.results.length - 1][0].transcript;
+
+  document.getElementById("urduText").innerText = text;
+  document.getElementById("status").innerText = "Translating...";
+
+  translate(text).then(() => {
+    document.getElementById("status").innerText = "Live";
+  });
+};
+
+recognition.onerror = function() {
+  document.getElementById("status").innerText = "Mic error / permission needed";
+};
+
+function startListening() {
+  recognition.start();
+  document.getElementById("status").innerText = "Listening...";
+}
 </script>
 
 </body>
