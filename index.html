@@ -174,166 +174,36 @@
     </div>
 
     <script>
-        let recognition;
-        let isListening = false;
-        let silenceTimer;
-        
-        // Master Storage Variables
-        let lockedUrdu = "";      // Urdu text already sent for translation
-        let lockedEnglish = "";   // Completed English translations
-        let currentDraftUrdu = ""; // The text the Imam is currently speaking
-        
-        const startBtn = document.getElementById('start-btn');
-        const statusBadge = document.getElementById('status');
-        const urduOutput = document.getElementById('urdu-output');
-        const englishOutput = document.getElementById('english-output');
+       async function translateText(text) {
+    if (!text || text.trim().length === 0) return;
 
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
+    try {
+        // Current Free API - Optimized with a generic wrapper to ensure clean data transfer
+        const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ur|en`);
+        const data = await response.json();
+        
+        if (data.responseData && data.responseData.translatedText) {
+            let translatedChunk = data.responseData.translatedText.trim();
             
-            // Continuous MUST be true to allow natural speaking rhythms
-            recognition.continuous = true; 
-            recognition.interimResults = true; 
-            recognition.lang = 'ur-PK'; 
-
-            recognition.onstart = () => {
-                isListening = true;
-                startBtn.innerText = "Stop Listening";
-                startBtn.style.backgroundColor = "#ef4444";
-                statusBadge.innerText = "● LIVE TRANSLATION ACTIVE";
-                statusBadge.classList.add('active');
-            };
-
-            recognition.onend = () => {
-                // If the system was forced to stop to clear the buffer, instantly reboot it
-                if (isListening) {
-                    setTimeout(() => {
-                        if (isListening) {
-                            try { recognition.start(); } catch(e) { console.error("Mic cycle error", e); }
-                        }
-                    }, 50);
-                } else {
-                    resetUI();
-                }
-            };
-
-            recognition.onresult = (event) => {
-                currentDraftUrdu = "";
-                let newlyFinalized = "";
-
-                // Parse Chrome's active text buffer
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    let chunk = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) {
-                        newlyFinalized += chunk + " ";
-                    } else {
-                        currentDraftUrdu += chunk;
-                    }
-                }
-
-                // SCENARIO 1: If Chrome behaves well and naturally finalizes a sentence
-                if (newlyFinalized.trim().length > 0) {
-                    lockedUrdu += newlyFinalized + " ";
-                    translateText(newlyFinalized.trim());
-                }
-
-                // Update the Urdu screen (White for locked, Gray for draft)
-                urduOutput.innerHTML = `<span style="color: #ffffff;">${lockedUrdu}</span> <span style="color: #9ca3af;">${currentDraftUrdu}</span>`;
-                autoScroll(urduOutput);
-
-                // Clear the pause timer because the Imam is actively speaking
-                clearTimeout(silenceTimer);
-
-                // SCENARIO 2: If Chrome gets stuck holding draft text (The Urdu Bug)
-                if (currentDraftUrdu.trim().length > 0) {
-                    silenceTimer = setTimeout(() => {
-                        let textToProcess = currentDraftUrdu.trim();
-                        
-                        // Move the draft text into the locked text pile
-                        lockedUrdu += textToProcess + " ";
-                        currentDraftUrdu = ""; 
-                        
-                        // Instantly update screen to show text turning white
-                        urduOutput.innerHTML = `<span style="color: #ffffff;">${lockedUrdu}</span>`;
-                        autoScroll(urduOutput);
-
-                        // Send the full sentence for translation
-                        translateText(textToProcess);
-
-                        // CRITICAL: Force the mic to cycle. This dumps Chrome's frozen memory 
-                        // so the next sentence doesn't overlap.
-                        recognition.stop(); 
-                        
-                    }, 1200); // 1.2 Seconds of silence = Sentence Complete
-                }
-            };
-
-            recognition.onerror = (event) => {
-                console.error("Speech Recognition Error: ", event.error);
-                if (event.error === 'not-allowed') {
-                    alert("Please allow microphone access.");
-                    isListening = false;
-                    resetUI();
-                }
-            };
-
-        } else {
-            alert("Your browser does not support Speech Recognition. Please use Google Chrome.");
-        }
-
-        function toggleListening() {
-            if (!isListening) {
-                recognition.start();
-            } else {
-                isListening = false;
-                recognition.stop();
-                clearTimeout(silenceTimer);
-                resetUI();
+            // Clean up common translation artifacts or glitches
+            if (translatedChunk.toLowerCase() === text.toLowerCase()) {
+                console.warn("API returned transliterated text, skipping display to keep screen clean.");
+                return;
             }
-        }
 
-        function resetUI() {
-            startBtn.innerText = "Start Listening";
-            startBtn.style.backgroundColor = "#10b981";
-            statusBadge.innerText = "● Offline";
-            statusBadge.classList.remove('active');
-        }
-
-        async function translateText(text) {
-            try {
-                const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ur|en`);
-                const data = await response.json();
-                
-                if (data.responseData && data.responseData.translatedText) {
-                    let translatedChunk = data.responseData.translatedText;
-                    
-                    // Remove placeholder on first translation
-                    if (lockedEnglish.length === 0) {
-                        englishOutput.innerText = "";
-                    }
-
-                    // Append the new translation block cleanly
-                    lockedEnglish += translatedChunk + "\n\n";
-                    englishOutput.innerText = lockedEnglish;
-                    autoScroll(englishOutput);
-                }
-            } catch (error) {
-                console.error("Translation Error: ", error);
+            // Remove placeholder text on the very first successful translation
+            if (englishOutput.innerText.includes("Translation will appear here")) {
+                englishOutput.innerText = "";
             }
-        }
 
-        function clearText() {
-            lockedUrdu = "";
-            lockedEnglish = "";
-            currentDraftUrdu = "";
-            urduOutput.innerText = "Imam's speech will show here...";
-            englishOutput.innerText = "Translation will appear here in real-time...";
+            // Append the new translation block cleanly with a double line break
+            englishOutput.innerText += translatedChunk + "\n\n";
+            autoScroll(englishOutput);
         }
-
-        function autoScroll(element) {
-            element.scrollTop = element.scrollHeight;
-        }
+    } catch (error) {
+        console.error("Translation Error: ", error);
+    }
+}
     </script>
 </body>
 </html>
