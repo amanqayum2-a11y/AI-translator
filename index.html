@@ -183,7 +183,7 @@
     <script>
         let recognition;
         let isListening = false;
-        let globalUrduHistory = ""; // Persistently stores finalized sentences across browser restarts
+        let globalUrduHistory = ""; // Persistently saves older text when microphone cycles
         
         const startBtn = document.getElementById('start-btn');
         const statusBadge = document.getElementById('status');
@@ -194,7 +194,8 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             
-            recognition.continuous = true; 
+            // CRITICAL FIX: Changing continuous to false forces immediate text finalization on brief pauses
+            recognition.continuous = false; 
             recognition.interimResults = true; 
             recognition.lang = 'ur-PK'; 
 
@@ -207,8 +208,13 @@
             };
 
             recognition.onend = () => {
+                // Instantly boot the engine back up to capture the next phrase seamlessly
                 if (isListening) {
-                    recognition.start(); // Keep running seamlessly if the API drops out
+                    setTimeout(() => {
+                        if (isListening) {
+                            try { recognition.start(); } catch(e) { console.error(e); }
+                        }
+                    }, 100); // 100ms micro-pause ensures hardware resets cleanly
                 } else {
                     resetUI();
                 }
@@ -216,23 +222,24 @@
 
             recognition.onresult = (event) => {
                 let interimTranscript = '';
+                let finalizedPhrase = '';
 
-                // Iterate through any newly caught phrases since the last event block
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    let chunk = event.results[i][0].transcript.trim();
-                    
+                    let chunk = event.results[i][0].transcript;
                     if (event.results[i].isFinal) {
-                        if (chunk.length > 0) {
-                            globalUrduHistory += chunk + " ";
-                            // INSTANT REAL-TIME TRIGGER: Send complete clauses out immediately!
-                            translateText(chunk);
-                        }
+                        finalizedPhrase += chunk + ' ';
                     } else {
-                        interimTranscript += event.results[i][0].transcript;
+                        interimTranscript += chunk;
                     }
                 }
 
-                // Smoothly update the Urdu pane (Finalized text in white, active typing text in gray)
+                // If a chunk is finalized, add it to our long-term history and push to translation API instantly
+                if (finalizedPhrase.trim().length > 0) {
+                    globalUrduHistory += finalizedPhrase;
+                    translateText(finalizedPhrase.trim());
+                }
+
+                // Keep displaying the running Urdu transcript smoothly
                 urduOutput.innerHTML = `<span style="color: #ffffff;">${globalUrduHistory}</span> <span style="color: #9ca3af;">${interimTranscript}</span>`;
                 autoScroll(urduOutput);
             };
@@ -252,6 +259,7 @@
 
         function toggleListening() {
             if (!isListening) {
+                globalUrduHistory = ""; // Reset history on a fresh run
                 recognition.start();
             } else {
                 isListening = false;
@@ -279,7 +287,7 @@
                         englishOutput.innerText = "";
                     }
 
-                    // Append translations sequentially with double breaks to prevent unreadable text walls
+                    // Append translations live, separated nicely by spaces/newlines
                     englishOutput.innerText += translatedChunk + "\n\n";
                     autoScroll(englishOutput);
                 }
