@@ -21,7 +21,6 @@
             overflow: hidden;
         }
 
-        /* Header styling for the TV display */
         header {
             background-color: #111827;
             padding: 20px 40px;
@@ -53,7 +52,6 @@
             animation: pulse 2s infinite;
         }
 
-        /* Main layout container */
         .container {
             display: flex;
             flex: 1;
@@ -62,7 +60,6 @@
             height: calc(100vh - 100px);
         }
 
-        /* Translation box takes maximum space for TV viewing */
         .translation-box {
             flex: 2;
             background-color: #1f2937;
@@ -81,7 +78,6 @@
             letter-spacing: 1px;
         }
 
-        /* Massive text for crystal clear viewing from the back of the prayer hall */
         #english-output {
             font-size: 3.5rem;
             line-height: 1.5;
@@ -92,7 +88,6 @@
             padding-right: 15px;
         }
 
-        /* Side panel for original Urdu transcript */
         .urdu-box {
             flex: 1;
             background-color: #111827;
@@ -113,7 +108,6 @@
             flex-grow: 1;
         }
 
-        /* Control panel for the operator laptop */
         .controls {
             position: absolute;
             bottom: 30px;
@@ -141,7 +135,6 @@
         .btn-clear { background-color: #4b5563; color: white; }
         .btn-clear:hover { background-color: #374151; }
 
-        /* Custom Scrollbar for clean look */
         ::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 5px; }
@@ -161,20 +154,20 @@
     </header>
 
     <div class="container">
-        <!-- Main English Translation Screen -->
+        <!-- English Screen -->
         <div class="translation-box">
             <div class="box-title">English Translation</div>
             <div id="english-output">Translation will appear here in real-time...</div>
         </div>
 
-        <!-- Side Urdu Transcript Box -->
+        <!-- Urdu Screen -->
         <div class="urdu-box">
             <div class="box-title" style="text-align: right;">اُردو سکرپٹ</div>
             <div id="urdu-output">Imam's speech will show here...</div>
         </div>
     </div>
 
-    <!-- Operator Control Buttons -->
+    <!-- Controls -->
     <div class="controls">
         <button class="btn-start" id="start-btn" onclick="toggleListening()">Start Listening</button>
         <button class="btn-clear" onclick="clearText()">Clear Screen</button>
@@ -183,7 +176,10 @@
     <script>
         let recognition;
         let isListening = false;
-        let globalUrduHistory = ""; // Persistently saves older text when microphone cycles
+        
+        // Sliding Window Trackers
+        let totalWordsSentForTranslation = 0;
+        let fallbackFlushTimer; 
         
         const startBtn = document.getElementById('start-btn');
         const statusBadge = document.getElementById('status');
@@ -194,8 +190,7 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             
-            // CRITICAL FIX: Changing continuous to false forces immediate text finalization on brief pauses
-            recognition.continuous = false; 
+            recognition.continuous = true; 
             recognition.interimResults = true; 
             recognition.lang = 'ur-PK'; 
 
@@ -208,40 +203,65 @@
             };
 
             recognition.onend = () => {
-                // Instantly boot the engine back up to capture the next phrase seamlessly
                 if (isListening) {
-                    setTimeout(() => {
-                        if (isListening) {
-                            try { recognition.start(); } catch(e) { console.error(e); }
-                        }
-                    }, 100); // 100ms micro-pause ensures hardware resets cleanly
+                    try { recognition.start(); } catch(e) { console.error(e); }
                 } else {
                     resetUI();
                 }
             };
 
             recognition.onresult = (event) => {
+                let finalTranscript = '';
                 let interimTranscript = '';
-                let finalizedPhrase = '';
 
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    let chunk = event.results[i][0].transcript;
+                // Gather all current words from the browser's audio buffer
+                for (let i = 0; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        finalizedPhrase += chunk + ' ';
+                        finalTranscript += event.results[i][0].transcript + ' ';
                     } else {
-                        interimTranscript += chunk;
+                        interimTranscript += event.results[i][0].transcript;
                     }
                 }
 
-                // If a chunk is finalized, add it to our long-term history and push to translation API instantly
-                if (finalizedPhrase.trim().length > 0) {
-                    globalUrduHistory += finalizedPhrase;
-                    translateText(finalizedPhrase.trim());
+                // Show the running Urdu script immediately to the audience
+                urduOutput.innerHTML = `<span style="color: #ffffff;">${finalTranscript}</span> <span style="color: #9ca3af;">${interimTranscript}</span>`;
+                autoScroll(urduOutput);
+
+                // Combine text and parse into clean word tokens
+                let fullRunningText = (finalTranscript + " " + interimTranscript).trim();
+                let allWords = fullRunningText.split(/\s+/).filter(Boolean);
+                
+                // SLIDING WINDOW PROCESSOR:
+                // We leave a safety padding of 4 words at the very end because Chrome dynamically 
+                // re-adjusts grammar for the most recent words. Everything before that is stable.
+                let safetyBuffer = 4;
+                if (allWords.length > totalWordsSentForTranslation + safetyBuffer) {
+                    let stableWords = allWords.slice(totalWordsSentForTranslation, allWords.length - safetyBuffer);
+                    let textToTranslate = stableWords.join(" ");
+
+                    if (textToTranslate.trim().length > 0) {
+                        translateText(textToTranslate);
+                        totalWordsSentForTranslation += stableWords.length; // Lock them in
+                    }
                 }
 
-                // Keep displaying the running Urdu transcript smoothly
-                urduOutput.innerHTML = `<span style="color: #ffffff;">${globalUrduHistory}</span> <span style="color: #9ca3af;">${interimTranscript}</span>`;
-                autoScroll(urduOutput);
+                // SILENCE FALLBACK: If the Imam stops speaking entirely or pauses deeply, 
+                // the safety buffer words would get stuck. This forces out remaining words after 1.2 seconds.
+                clearTimeout(fallbackFlushTimer);
+                fallbackFlushTimer = setTimeout(() => {
+                    let currentRunningText = (finalTranscript + " " + interimTranscript).trim();
+                    let currentWords = currentRunningText.split(/\s+/).filter(Boolean);
+                    
+                    if (currentWords.length > totalWordsSentForTranslation) {
+                        let remainingWords = currentWords.slice(totalWordsSentForTranslation);
+                        let textToTranslate = remainingWords.join(" ");
+                        
+                        if (textToTranslate.trim().length > 0) {
+                            translateText(textToTranslate);
+                            totalWordsSentForTranslation = currentWords.length;
+                        }
+                    }
+                }, 1200);
             };
 
             recognition.onerror = (event) => {
@@ -259,11 +279,12 @@
 
         function toggleListening() {
             if (!isListening) {
-                globalUrduHistory = ""; // Reset history on a fresh run
+                totalWordsSentForTranslation = 0; // Reset text stream baseline
                 recognition.start();
             } else {
                 isListening = false;
                 recognition.stop();
+                clearTimeout(fallbackFlushTimer);
                 resetUI();
             }
         }
@@ -283,12 +304,13 @@
                 if (data.responseData && data.responseData.translatedText) {
                     let translatedChunk = data.responseData.translatedText;
                     
+                    // Clear placeholder warning on first pass
                     if (englishOutput.innerText.includes("Translation will appear here")) {
                         englishOutput.innerText = "";
                     }
 
-                    // Append translations live, separated nicely by spaces/newlines
-                    englishOutput.innerText += translatedChunk + "\n\n";
+                    // Append real contextual English sentences smoothly
+                    englishOutput.innerText += translatedChunk + " ";
                     autoScroll(englishOutput);
                 }
             } catch (error) {
@@ -299,7 +321,7 @@
         function clearText() {
             urduOutput.innerText = "Imam's speech will show here...";
             englishOutput.innerText = "Translation will appear here in real-time...";
-            globalUrduHistory = "";
+            totalWordsSentForTranslation = 0;
         }
 
         function autoScroll(element) {
