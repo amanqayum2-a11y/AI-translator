@@ -1,203 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mosque Real-Time Speech Translator</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #0b0f19;
-            color: #ffffff;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* Header styling for the TV display */
-        header {
-            background-color: #111827;
-            padding: 20px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 3px solid #10b981; /* Islamic Green accent */
-        }
-
-        h1 {
-            font-size: 2.5rem;
-            color: #10b981;
-            font-weight: 600;
-        }
-
-        .status-badge {
-            padding: 10px 20px;
-            border-radius: 30px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            background-color: #ef4444;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .status-badge.active {
-            background-color: #10b981;
-            animation: pulse 2s infinite;
-        }
-
-        /* Main layout container */
-        .container {
-            display: flex;
-            flex: 1;
-            padding: 30px;
-            gap: 30px;
-            height: calc(100vh - 100px);
-        }
-
-        /* Translation box takes maximum space for TV viewing */
-        .translation-box {
-            flex: 2;
-            background-color: #1f2937;
-            border-radius: 15px;
-            padding: 40px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        }
-
-        .box-title {
-            font-size: 1.5rem;
-            color: #9ca3af;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        /* Massive text for crystal clear viewing from the back of the prayer hall */
-        #english-output {
-            font-size: 3.5rem;
-            line-height: 1.5;
-            color: #f3f4f6;
-            overflow-y: auto;
-            flex-grow: 1;
-            white-space: pre-wrap;
-            padding-right: 15px;
-        }
-
-        /* Side panel for original Urdu transcript (optional reference) */
-        .urdu-box {
-            flex: 1;
-            background-color: #111827;
-            border-radius: 15px;
-            padding: 30px;
-            display: flex;
-            flex-direction: column;
-            border: 1px solid #374151;
-        }
-
-        #urdu-output {
-            font-size: 2.2rem;
-            line-height: 1.6;
-            color: #a7f3d0;
-            direction: rtl;
-            font-family: 'Noori Nastaliq', 'Urdu Typesetting', sans-serif;
-            overflow-y: auto;
-            flex-grow: 1;
-        }
-
-        /* Control panel for the operator laptop */
-        .controls {
-            position: absolute;
-            bottom: 30px;
-            right: 50px;
-            display: flex;
-            gap: 15px;
-            background: rgba(17, 24, 39, 0.85);
-            padding: 15px;
-            border-radius: 10px;
-            backdrop-filter: blur(5px);
-        }
-
-        button {
-            padding: 12px 25px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-start { background-color: #10b981; color: white; }
-        .btn-start:hover { background-color: #059669; }
-        .btn-clear { background-color: #4b5563; color: white; }
-        .btn-clear:hover { background-color: #374151; }
-
-        /* Custom Scrollbar for clean look */
-        ::-webkit-scrollbar { width: 10px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 5px; }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
-        }
-    </style>
-</head>
-<body>
-
-    <header>
-        <h1>Mosque Live Translation (Urdu ➔ English)</h1>
-        <div id="status" class="status-badge">● Offline</div>
-    </header>
-
-    <div class="container">
-        <!-- Main English Translation Screen -->
-        <div class="translation-box">
-            <div class="box-title">English Translation</div>
-            <div id="english-output">Translation will appear here in real-time...</div>
-        </div>
-
-        <!-- Side Urdu Transcript Box -->
-        <div class="urdu-box">
-            <div class="box-title" style="text-align: right;">اُردو سکرپٹ</div>
-            <div id="urdu-output">Imam's speech will show here...</div>
-        </div>
-    </div>
-
-    <!-- Operator Control Buttons -->
-    <div class="controls">
-        <button class="btn-start" id="start-btn" onclick="toggleListening()">Start Listening</button>
-        <button class="btn-clear" onclick="clearText()">Clear Screen</button>
-    </div>
-
-    <script>
+<script>
         let recognition;
         let isListening = false;
+        let silenceTimer; // Timer to detect pauses in speech
+        let accumulatedText = ""; // Holds text during a single spoken phrase
         
         const startBtn = document.getElementById('start-btn');
         const statusBadge = document.getElementById('status');
         const urduOutput = document.getElementById('urdu-output');
         const englishOutput = document.getElementById('english-output');
 
-        // Check if browser supports Web Speech API
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             
-            // Set up configurations
-            recognition.continuous = true; // Keep listening continuously
-            recognition.interimResults = true; // Show temporary live results while speaking
-            recognition.lang = 'ur-PK'; // Target Urdu (Pakistan) speech patterns
+            recognition.continuous = true; 
+            recognition.interimResults = true; 
+            recognition.lang = 'ur-PK'; 
 
             recognition.onstart = () => {
                 isListening = true;
@@ -208,17 +26,19 @@
             };
 
             recognition.onend = () => {
-                // Auto-restart if it cuts out unexpectedly during the sermon
                 if (isListening) {
-                    recognition.start();
+                    recognition.start(); // Auto-restart loop
                 } else {
                     resetUI();
                 }
             };
 
-            recognition.onresult = async (event) => {
+            recognition.onresult = (event) => {
                 let interimTranscript = '';
                 let finalTranscript = '';
+
+                // Clear any pending translation timers because the Imam is actively speaking
+                clearTimeout(silenceTimer);
 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
@@ -228,29 +48,39 @@
                     }
                 }
 
-                // Display original Urdu speech live
+                // Update the Urdu box immediately with live results
                 if (finalTranscript || interimTranscript) {
                     urduOutput.innerHTML = `<span style="color: #ffffff;">${finalTranscript}</span> <span style="color: #9ca3af;">${interimTranscript}</span>`;
                     autoScroll(urduOutput);
                 }
 
-                // Process translation once a full sentence is finalized
+                // If a final segment is declared by the browser, capture it
                 if (finalTranscript.trim().length > 0) {
-                    translateText(finalTranscript.trim());
+                    accumulatedText += finalTranscript + " ";
                 }
+
+                // TRUE REAL-TIME TRIGGER: If the Imam pauses speaking for 1.5 seconds, 
+                // instantly translate whatever has been spoken so far.
+                silenceTimer = setTimeout(() => {
+                    let textToTranslate = accumulatedText.trim() || interimTranscript.trim();
+                    if (textToTranslate.length > 0) {
+                        translateText(textToTranslate);
+                        accumulatedText = ""; // Clear buffer for next sentence
+                    }
+                }, 1500); // 1500 milliseconds = 1.5 seconds of silence
             };
 
             recognition.onerror = (event) => {
                 console.error("Speech Recognition Error: ", event.error);
                 if (event.error === 'not-allowed') {
-                    alert("Please allow microphone access in your browser settings.");
+                    alert("Please allow microphone access.");
                     isListening = false;
                     resetUI();
                 }
             };
 
         } else {
-            alert("Your browser does not support Speech Recognition. Please use Google Chrome on a laptop.");
+            alert("Your browser does not support Speech Recognition. Please use Google Chrome.");
         }
 
         function toggleListening() {
@@ -259,6 +89,7 @@
             } else {
                 isListening = false;
                 recognition.stop();
+                clearTimeout(silenceTimer);
                 resetUI();
             }
         }
@@ -270,7 +101,6 @@
             statusBadge.classList.remove('active');
         }
 
-        // Free/Open Translation API implementation (MyMemory API)
         async function translateText(text) {
             try {
                 const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ur|en`);
@@ -279,12 +109,11 @@
                 if (data.responseData && data.responseData.translatedText) {
                     let translatedChunk = data.responseData.translatedText;
                     
-                    // If it's the first translation, clear the placeholder text
                     if (englishOutput.innerText.includes("Translation will appear here")) {
                         englishOutput.innerText = "";
                     }
 
-                    // Append translation and smoothly scroll the TV screen down
+                    // Append the live translation chunk seamlessly
                     englishOutput.innerText += translatedChunk + " \n\n";
                     autoScroll(englishOutput);
                 }
@@ -296,11 +125,10 @@
         function clearText() {
             urduOutput.innerText = "Imam's speech will show here...";
             englishOutput.innerText = "Translation will appear here in real-time...";
+            accumulatedText = "";
         }
 
         function autoScroll(element) {
             element.scrollTop = element.scrollHeight;
         }
     </script>
-</body>
-</html>
