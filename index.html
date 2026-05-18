@@ -174,36 +174,162 @@
     </div>
 
     <script>
-       async function translateText(text) {
-    if (!text || text.trim().length === 0) return;
-
-    try {
-        // Current Free API - Optimized with a generic wrapper to ensure clean data transfer
-        const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ur|en`);
-        const data = await response.json();
+        let recognition;
+        let isListening = false;
+        let silenceTimer;
         
-        if (data.responseData && data.responseData.translatedText) {
-            let translatedChunk = data.responseData.translatedText.trim();
+        // Master Storage Variables
+        let lockedUrdu = "";      
+        let lockedEnglish = "";   
+        let currentDraftUrdu = ""; 
+        
+        const startBtn = document.getElementById('start-btn');
+        const statusBadge = document.getElementById('status');
+        const urduOutput = document.getElementById('urdu-output');
+        const englishOutput = document.getElementById('english-output');
+
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
             
-            // Clean up common translation artifacts or glitches
-            if (translatedChunk.toLowerCase() === text.toLowerCase()) {
-                console.warn("API returned transliterated text, skipping display to keep screen clean.");
-                return;
-            }
+            recognition.continuous = true; 
+            recognition.interimResults = true; 
+            recognition.lang = 'ur-PK'; 
 
-            // Remove placeholder text on the very first successful translation
-            if (englishOutput.innerText.includes("Translation will appear here")) {
-                englishOutput.innerText = "";
-            }
+            recognition.onstart = () => {
+                isListening = true;
+                startBtn.innerText = "Stop Listening";
+                startBtn.style.backgroundColor = "#ef4444";
+                statusBadge.innerText = "● LIVE TRANSLATION ACTIVE";
+                statusBadge.classList.add('active');
+            };
 
-            // Append the new translation block cleanly with a double line break
-            englishOutput.innerText += translatedChunk + "\n\n";
-            autoScroll(englishOutput);
+            recognition.onend = () => {
+                if (isListening) {
+                    setTimeout(() => {
+                        if (isListening) {
+                            try { recognition.start(); } catch(e) { console.error("Mic cycle error", e); }
+                        }
+                    }, 50);
+                } else {
+                    resetUI();
+                }
+            };
+
+            recognition.onresult = (event) => {
+                currentDraftUrdu = "";
+                let newlyFinalized = "";
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    let chunk = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        newlyFinalized += chunk + " ";
+                    } else {
+                        currentDraftUrdu += chunk;
+                    }
+                }
+
+                if (newlyFinalized.trim().length > 0) {
+                    lockedUrdu += newlyFinalized + " ";
+                    translateText(newlyFinalized.trim());
+                }
+
+                urduOutput.innerHTML = `<span style="color: #ffffff;">${lockedUrdu}</span> <span style="color: #9ca3af;">${currentDraftUrdu}</span>`;
+                autoScroll(urduOutput);
+
+                clearTimeout(silenceTimer);
+
+                if (currentDraftUrdu.trim().length > 0) {
+                    silenceTimer = setTimeout(() => {
+                        let textToProcess = currentDraftUrdu.trim();
+                        
+                        lockedUrdu += textToProcess + " ";
+                        currentDraftUrdu = ""; 
+                        
+                        urduOutput.innerHTML = `<span style="color: #ffffff;">${lockedUrdu}</span>`;
+                        autoScroll(urduOutput);
+
+                        translateText(textToProcess);
+
+                        // Soft reset the microphone buffer to keep memory clean
+                        recognition.stop(); 
+                        
+                    }, 1200); 
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech Recognition Error: ", event.error);
+                if (event.error === 'not-allowed') {
+                    alert("Please allow microphone access.");
+                    isListening = false;
+                    resetUI();
+                }
+            };
+
+        } else {
+            alert("Your browser does not support Speech Recognition. Please use Google Chrome.");
         }
-    } catch (error) {
-        console.error("Translation Error: ", error);
-    }
-}
+
+        function toggleListening() {
+            if (!isListening) {
+                recognition.start();
+            } else {
+                isListening = false;
+                recognition.stop();
+                clearTimeout(silenceTimer);
+                resetUI();
+            }
+        }
+
+        function resetUI() {
+            startBtn.innerText = "Start Listening";
+            startBtn.style.backgroundColor = "#10b981";
+            statusBadge.innerText = "● Offline";
+            statusBadge.classList.remove('active');
+        }
+
+        async function translateText(text) {
+            if (!text || text.trim().length === 0) return;
+
+            try {
+                const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ur|en`);
+                const data = await response.json();
+                
+                if (data.responseData && data.responseData.translatedText) {
+                    let translatedChunk = data.responseData.translatedText.trim();
+                    
+                    // Skips common translation hallucinations or raw romanized loops
+                    if (translatedChunk.toLowerCase() === text.toLowerCase()) {
+                        console.warn("API returned transliterated text, skipping display to keep screen clean.");
+                        return;
+                    }
+
+                    if (englishOutput.innerText.includes("Translation will appear here")) {
+                        englishOutput.innerText = "";
+                    }
+
+                    // Log to display master variable
+                    lockedEnglish += translatedChunk + "\n\n";
+                    englishOutput.innerText = lockedEnglish;
+                    autoScroll(englishOutput);
+                }
+            } catch (error) {
+                console.error("Translation Error: ", error);
+            }
+        }
+
+        function clearText() {
+            lockedUrdu = "";
+            lockedEnglish = "";
+            currentDraftUrdu = "";
+            urduOutput.innerText = "Imam's speech will show here...";
+            englishOutput.innerText = "Translation will appear here in real-time...";
+        }
+
+        function autoScroll(element) {
+            element.scrollTop = element.scrollHeight;
+        }
     </script>
 </body>
 </html>
