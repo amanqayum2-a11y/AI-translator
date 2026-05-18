@@ -81,7 +81,6 @@
             padding-bottom: 15px;
         }
 
-        /* Smaller font size for maximum screen efficiency */
         #english-output {
             font-size: 2.5rem; 
             line-height: 1.6;
@@ -123,9 +122,8 @@
         let isListening = false;
         let silenceTimer;
         
-        let lockedUrdu = "";      
         let lockedEnglish = "";   
-        let currentDraftUrdu = ""; 
+        let lastProcessedText = ""; // Deduplication guard variable
         
         const statusBadge = document.getElementById('status');
         const englishOutput = document.getElementById('english-output');
@@ -149,12 +147,13 @@
             };
 
             recognition.onend = () => {
+                // If the app purposefully forced a mic cycle to dispatch text, turn it back on instantly
                 if (isListening) {
-                    setTimeout(() => {
-                        if (isListening) {
-                            try { recognition.start(); } catch(e) { console.error("Mic cycle error", e); }
-                        }
-                    }, 50);
+                    try { 
+                        recognition.start(); 
+                    } catch(e) { 
+                        setTimeout(() => { if(isListening) recognition.start(); }, 10);
+                    }
                 } else {
                     statusBadge.innerText = "● Offline";
                     statusBadge.classList.remove('active');
@@ -162,36 +161,27 @@
             };
 
             recognition.onresult = (event) => {
-                currentDraftUrdu = "";
-                let newlyFinalized = "";
+                let completeSegment = "";
 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    let chunk = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) {
-                        newlyFinalized += chunk + " ";
-                    } else {
-                        currentDraftUrdu += chunk;
-                    }
-                }
-
-                if (newlyFinalized.trim().length > 0) {
-                    lockedUrdu += newlyFinalized + " ";
-                    translateText(newlyFinalized.trim());
+                    completeSegment += event.results[i][0].transcript;
                 }
 
                 clearTimeout(silenceTimer);
 
-                if (currentDraftUrdu.trim().length > 0) {
-                    // Timer reduced to 0.8 seconds (800ms) for faster dispatch
+                if (completeSegment.trim().length > 0) {
+                    // Fast 800ms dispatch
                     silenceTimer = setTimeout(() => {
-                        let textToProcess = currentDraftUrdu.trim();
+                        let textToProcess = completeSegment.trim();
                         
-                        lockedUrdu += textToProcess + " ";
-                        currentDraftUrdu = ""; 
-                        
-                        translateText(textToProcess);
-                        recognition.stop(); 
-                        
+                        // Deduplication check: Has this string chunk already gone out?
+                        if (textToProcess !== lastProcessedText) {
+                            lastProcessedText = textToProcess; 
+                            translateText(textToProcess);
+                            
+                            // Hard-stop microphone immediately to safely clear Chrome's internal voice cache
+                            recognition.stop(); 
+                        }
                     }, 800); 
                 }
             };
@@ -226,8 +216,9 @@
                 if (data.responseData && data.responseData.translatedText) {
                     let translatedChunk = data.responseData.translatedText.trim();
                     
+                    // Filter raw echoes or pure transcription leaks
                     if (translatedChunk.toLowerCase() === text.toLowerCase()) {
-                        return; // Skip if it hallucinated Roman Urdu
+                        return; 
                     }
 
                     if (englishOutput.innerText.includes("Listening to the Imam")) {
@@ -235,7 +226,8 @@
                         lockedEnglish = "";
                     }
 
-                    lockedEnglish += translatedChunk + " "; // Appending next to each other instead of double line breaks for space saving
+                    // Append translation cleanly
+                    lockedEnglish += translatedChunk + " "; 
                     englishOutput.innerText = lockedEnglish;
                     autoScroll(englishOutput);
                 }
